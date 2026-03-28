@@ -1,0 +1,1 @@
+SKSE plugin that fixes the first person shadow casting torch lights when using Improved Camera.
