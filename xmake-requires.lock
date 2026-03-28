@@ -14,7 +14,7 @@
         ["directxmath#31fecfc4"] = {
             repo = {
                 branch = "master",
-                commit = "5343d94a3e18b86aa2f77a516afd177489f36142",
+                commit = "1c4a5226d098031c7980196c162975781e1627cd",
                 url = "https://gitlab.com/tboox/xmake-repo.git"
             },
             version = "2024.02"

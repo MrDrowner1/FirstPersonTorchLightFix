@@ -9,7 +9,7 @@ namespace {
             return;
 
         if (auto* light = netimmerse_cast<RE::NiPointLight*>(a_obj)) {
-            logger::info("FPTorchFix: NiPointLight '{}' culled={} -> {}",
+            logger::info("FirstPersonTorchLightFix: NiPointLight '{}' culled={} -> {}",
                 light->name.c_str(),
                 light->GetAppCulled(),
                 a_culled);
@@ -29,23 +29,19 @@ namespace {
         if (!player)
             return;
 
-        auto* camera = RE::PlayerCamera::GetSingleton();
-        if (!camera || !camera->currentState || camera->currentState->id != RE::CameraStates::kFirstPerson)
-            return;
-
         auto* fpRoot = player->Get3D(true);
         auto* tpRoot = player->Get3D(false);
 
         if (!fpRoot || !tpRoot)
             return;
 
-        logger::info("FPTorchFix: updating 1st person skeleton (cull=0)");
+        logger::info("FirstPersonTorchLightFix: updating 1st person skeleton (cull=0)");
         TraverseAndSetCulled(fpRoot, false);
 
-        logger::info("FPTorchFix: updating 3rd person skeleton (cull=1)");
+        logger::info("FirstPersonTorchLightFix: updating 3rd person skeleton (cull=1)");
         TraverseAndSetCulled(tpRoot, true);
     }
-    
+
 
     class EquipEventSink : public RE::BSTEventSink<RE::TESEquipEvent>
     {
@@ -73,9 +69,11 @@ namespace {
 
             bool equipped = a_event->equipped;
             SKSE::GetTaskInterface()->AddTask([equipped]() {
-                if (equipped) {
-                    FixTorchLights();
-                }
+                auto* camera = RE::PlayerCamera::GetSingleton();
+                if (!camera || !camera->currentState || camera->currentState->id != RE::CameraStates::kFirstPerson)
+                    return;
+
+                FixTorchLights();
             });
 
             return RE::BSEventNotifyControl::kContinue;
@@ -96,10 +94,38 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
                 auto* holder = RE::ScriptEventSourceHolder::GetSingleton();
                 if (holder) {
                     holder->AddEventSink(EquipEventSink::GetSingleton());
-                    logger::info("FPTorchFix: equip sink registered");
+                    logger::info("FirstPersonTorchLightFix: equip sink registered");
                 } else {
-                    logger::info("FPTorchFix: failed to get event source holder");
+                    logger::info("FirstPersonTorchLightFix: failed to get event source holder");
                 }
+
+                SKSE::GetTaskInterface()->AddTask([]() {
+                auto* player = RE::PlayerCharacter::GetSingleton();
+                if (!player)
+                    return;
+
+                if (auto* fpRoot = player->Get3D(true))
+                    TraverseAndSetCulled(fpRoot, true);
+                if (auto* tpRoot = player->Get3D(false))
+                    TraverseAndSetCulled(tpRoot, true);
+
+                auto* leftHand = player->GetEquippedObject(false);
+                auto* rightHand = player->GetEquippedObject(true);
+
+                bool hasTorch =
+                    (leftHand && leftHand->GetFormType() == RE::FormType::Light) ||
+                    (rightHand && rightHand->GetFormType() == RE::FormType::Light);
+
+                if (!hasTorch)
+                    return;
+
+                auto* camera = RE::PlayerCamera::GetSingleton();
+                if (!camera || !camera->currentState ||
+                    camera->currentState->id != RE::CameraStates::kFirstPerson)
+                    return;
+
+                FixTorchLights();
+            });
             }
         });
 

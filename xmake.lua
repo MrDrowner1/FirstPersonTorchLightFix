@@ -49,7 +49,7 @@ target('FirstPersonTorchLightFix')
     add_rules('commonlibsse-ng.plugin', {
         name        = 'FirstPersonTorchLightFix',
         author      = 'MrDrowner1',
-        description = 'Fixes shadow casting torch light in first person with Improved Camera.',
+        description = 'No description provided.',
         runtime     = runtime
     })
 
