@@ -1,86 +1,83 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
-namespace {
+void TraverseAndSetCulled(RE::NiAVObject* a_obj, bool a_culled)
+{
+    if (!a_obj)
+        return;
 
-    void TraverseAndSetCulled(RE::NiAVObject* a_obj, bool a_culled)
-    {
-        if (!a_obj)
-            return;
-
-        if (auto* light = netimmerse_cast<RE::NiPointLight*>(a_obj)) {
-            logger::info("FirstPersonTorchLightFix: NiPointLight '{}' culled={} -> {}",
-                light->name.c_str(),
-                light->GetAppCulled(),
-                a_culled);
-            light->SetAppCulled(a_culled);
-        }
-
-        if (auto* node = a_obj->AsNode()) {
-            for (auto& child : node->GetChildren()) {
-                TraverseAndSetCulled(child.get(), a_culled);
-            }
-        }
+    if (auto* light = netimmerse_cast<RE::NiPointLight*>(a_obj)) {
+        logger::info("FirstPersonTorchLightFix: NiPointLight '{}' culled={} -> {}",
+            light->name.c_str(),
+            light->GetAppCulled(),
+            a_culled);
+        light->SetAppCulled(a_culled);
     }
 
-    void FixTorchLights()
+    if (auto* node = a_obj->AsNode()) {
+        for (auto& child : node->GetChildren()) {
+            TraverseAndSetCulled(child.get(), a_culled);
+        }
+    }
+}
+
+void FixTorchLights()
+{
+    auto* player = RE::PlayerCharacter::GetSingleton();
+    if (!player)
+        return;
+
+    auto* fpRoot = player->Get3D(true);
+    auto* tpRoot = player->Get3D(false);
+
+    if (!fpRoot || !tpRoot)
+        return;
+
+    logger::info("FirstPersonTorchLightFix: updating 1st person skeleton (cull=0)");
+    TraverseAndSetCulled(fpRoot, false);
+
+    logger::info("FirstPersonTorchLightFix: updating 3rd person skeleton (cull=1)");
+    TraverseAndSetCulled(tpRoot, true);
+}
+
+
+class EquipEventSink : public RE::BSTEventSink<RE::TESEquipEvent>
+{
+public:
+    static EquipEventSink* GetSingleton()
     {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player)
-            return;
-
-        auto* fpRoot = player->Get3D(true);
-        auto* tpRoot = player->Get3D(false);
-
-        if (!fpRoot || !tpRoot)
-            return;
-
-        logger::info("FirstPersonTorchLightFix: updating 1st person skeleton (cull=0)");
-        TraverseAndSetCulled(fpRoot, false);
-
-        logger::info("FirstPersonTorchLightFix: updating 3rd person skeleton (cull=1)");
-        TraverseAndSetCulled(tpRoot, true);
+        static EquipEventSink singleton;
+        return &singleton;
     }
 
-
-    class EquipEventSink : public RE::BSTEventSink<RE::TESEquipEvent>
+    RE::BSEventNotifyControl ProcessEvent(
+        const RE::TESEquipEvent* a_event,
+        RE::BSTEventSource<RE::TESEquipEvent>*) override
     {
-    public:
-        static EquipEventSink* GetSingleton()
-        {
-            static EquipEventSink singleton;
-            return &singleton;
-        }
-
-        RE::BSEventNotifyControl ProcessEvent(
-            const RE::TESEquipEvent* a_event,
-            RE::BSTEventSource<RE::TESEquipEvent>*) override
-        {
-            if (!a_event || !a_event->actor)
-                return RE::BSEventNotifyControl::kContinue;
-
-            auto* player = RE::PlayerCharacter::GetSingleton();
-            if (a_event->actor.get() != player)
-                return RE::BSEventNotifyControl::kContinue;
-
-            auto* form = RE::TESForm::LookupByID(a_event->baseObject);
-            if (!form || form->GetFormType() != RE::FormType::Light)
-                return RE::BSEventNotifyControl::kContinue;
-
-            bool equipped = a_event->equipped;
-            SKSE::GetTaskInterface()->AddTask([equipped]() {
-                auto* camera = RE::PlayerCamera::GetSingleton();
-                if (!camera || !camera->currentState || camera->currentState->id != RE::CameraStates::kFirstPerson)
-                    return;
-
-                FixTorchLights();
-            });
-
+        if (!a_event || !a_event->actor)
             return RE::BSEventNotifyControl::kContinue;
-        }
-    };
 
-}  // namespace
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (a_event->actor.get() != player)
+            return RE::BSEventNotifyControl::kContinue;
+
+        auto* form = RE::TESForm::LookupByID(a_event->baseObject);
+        if (!form || form->GetFormType() != RE::FormType::Light)
+            return RE::BSEventNotifyControl::kContinue;
+
+        bool equipped = a_event->equipped;
+        SKSE::GetTaskInterface()->AddTask([equipped]() {
+            auto* camera = RE::PlayerCamera::GetSingleton();
+            if (!camera || !camera->currentState || camera->currentState->id != RE::CameraStates::kFirstPerson)
+                return;
+
+            FixTorchLights();
+        });
+
+        return RE::BSEventNotifyControl::kContinue;
+    }
+};
+
 
 SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 {
