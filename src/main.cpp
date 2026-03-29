@@ -84,19 +84,19 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
     SKSE::Init(a_skse);
 
     SKSE::GetMessagingInterface()->RegisterListener(
-        [](SKSE::MessagingInterface::Message* a_msg) {
-            if (a_msg->type == SKSE::MessagingInterface::kPostLoadGame ||
-                a_msg->type == SKSE::MessagingInterface::kNewGame) {
+    [](SKSE::MessagingInterface::Message* a_msg) {
+        if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
+            auto* holder = RE::ScriptEventSourceHolder::GetSingleton();
+            if (holder) {
+                holder->AddEventSink(EquipEventSink::GetSingleton());
+                logger::info("FirstPersonTorchLightFix: equip sink registered");
+            } else {
+                logger::info("FirstPersonTorchLightFix: failed to get event source holder");
+            }
+        }
 
-                auto* holder = RE::ScriptEventSourceHolder::GetSingleton();
-                if (holder) {
-                    holder->AddEventSink(EquipEventSink::GetSingleton());
-                    logger::info("FirstPersonTorchLightFix: equip sink registered");
-                } else {
-                    logger::info("FirstPersonTorchLightFix: failed to get event source holder");
-                }
-
-                SKSE::GetTaskInterface()->AddTask([]() {
+        if (a_msg->type == SKSE::MessagingInterface::kPostLoadGame) {
+            SKSE::GetTaskInterface()->AddTask([]() {
                 auto* player = RE::PlayerCharacter::GetSingleton();
                 if (!player)
                     return;
@@ -123,8 +123,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 
                 FixTorchLights();
             });
-            }
-        });
+        }
+    });
 
     return true;
 }
